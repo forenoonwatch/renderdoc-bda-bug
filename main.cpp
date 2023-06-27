@@ -77,7 +77,7 @@ void init_image() {
 		.mipLevels = 1,
 		.arrayLayers = 1,
 		.samples = VK_SAMPLE_COUNT_1_BIT,
-		.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+		.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
 	};
 
 	VmaAllocationCreateInfo allocInfo{
