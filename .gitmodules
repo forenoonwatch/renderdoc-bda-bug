@@ -1,0 +1,12 @@
+[submodule "volk"]
+	path = volk
+	url = https://github.com/zeux/volk.git
+[submodule "vk-bootstrap"]
+	path = vk-bootstrap
+	url = https://github.com/charles-lunarg/vk-bootstrap.git
+[submodule "VulkanMemoryAllocator"]
+	path = VulkanMemoryAllocator
+	url = https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git
+[submodule "glfw"]
+	path = glfw
+	url = https://github.com/glfw/glfw.git
