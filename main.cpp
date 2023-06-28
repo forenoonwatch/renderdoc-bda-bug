@@ -24,7 +24,12 @@ GLFWwindow* g_window;
 VkImage g_image;
 VmaAllocation g_imageAllocation;
 
+VkDeviceMemory g_memory;
+
+bool g_errored = false;
+
 void init_image();
+void init_image_direct();
 
 void render();
 
@@ -40,7 +45,8 @@ int main() {
 	init_vulkan();
 	init_allocator();
 
-	init_image();
+	//init_image();
+	init_image_direct();
 
 	while (!glfwWindowShouldClose(g_window)) {
 		glfwPollEvents();
@@ -51,7 +57,9 @@ int main() {
 	// DEINIT
 	vkDeviceWaitIdle(g_device);
 
-	vmaDestroyImage(g_allocator, g_image, g_imageAllocation);
+	//vmaDestroyImage(g_allocator, g_image, g_imageAllocation);
+	vkDestroyImage(g_device, g_image, nullptr);
+	vkFreeMemory(g_device, g_memory, nullptr);
 
 	for (auto& imageView : g_swapchainImageViews) {
 		vkDestroyImageView(g_device, imageView, nullptr);
@@ -89,7 +97,55 @@ void init_image() {
 	vmaCreateImage(g_allocator, &imageInfo, &allocInfo, &g_image, &g_imageAllocation, nullptr);
 }
 
+uint32_t find_memory_type(uint32_t typeFilter, VkMemoryPropertyFlags properties) {
+	auto& memProps = g_physicalDevice.memory_properties;
+
+	for (uint32_t i = 0; i < memProps.memoryTypeCount; ++i) {
+		if ((typeFilter & (1 << i)) && (memProps.memoryTypes[i].propertyFlags & properties) == properties) {
+			return i;
+		}
+	}
+
+	return 0;
+}
+
+void init_image_direct() {
+	VkImageCreateInfo imageInfo{
+		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+		.imageType = VK_IMAGE_TYPE_2D,
+		.format = VK_FORMAT_R8_UINT,
+		.extent = {1, 1, 1},
+		.mipLevels = 1,
+		.arrayLayers = 1,
+		.samples = VK_SAMPLE_COUNT_1_BIT,
+		.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+	};
+	vkCreateImage(g_device, &imageInfo, nullptr, &g_image);
+
+	VkMemoryRequirements memReqs{};
+	vkGetImageMemoryRequirements(g_device, g_image, &memReqs);
+
+	VkMemoryAllocateFlagsInfo allocFlags{
+		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO,
+		.flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_CAPTURE_REPLAY_BIT,
+	};
+
+	VkMemoryAllocateInfo allocInfo{
+		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+		.pNext = &allocFlags,
+		.allocationSize = memReqs.size,
+		.memoryTypeIndex = find_memory_type(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT),
+	};
+	vkAllocateMemory(g_device, &allocInfo, nullptr, &g_memory);
+
+	vkBindImageMemory(g_device, g_image, g_memory, 0);
+}
+
 void render() {
+	if (g_errored) {
+		return;
+	}
+
 	vkWaitForFences(g_device, 1, &g_fence, VK_TRUE, UINT64_MAX);
 	vkResetFences(g_device, 1, &g_fence);
 
@@ -151,12 +207,14 @@ void render() {
 
 	auto result = vkQueueSubmit(g_device.get_queue(vkb::QueueType::graphics).value(), 1, &submitInfo, g_fence);
 	if (result != VK_SUCCESS) {
-		printf("Submit failed: %d\n", result);
+		g_errored = true;
+		printf("SUBMIT FAILED: %d, no further commands will be submitted\n", result);
 	}
 
 	result = vkQueuePresentKHR(g_device.get_queue(vkb::QueueType::present).value(), &presentInfo);
 	if (result != VK_SUCCESS) {
-		printf("Present failed: %d\n", result);
+		g_errored = true;
+		printf("PRESENT FAILED: %d, no further commands will be submitted\n", result);
 	}
 }
 
