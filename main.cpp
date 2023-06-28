@@ -17,6 +17,7 @@ VmaAllocator g_allocator;
 VkSurfaceKHR g_surface;
 VkCommandPool g_commandPool;
 VkFence g_fence;
+VkSemaphore g_semaphore;
 
 GLFWwindow* g_window;
 
@@ -56,6 +57,7 @@ int main() {
 		vkDestroyImageView(g_device, imageView, nullptr);
 	}
 
+	vkDestroySemaphore(g_device, g_semaphore, nullptr);
 	vkDestroyFence(g_device, g_fence, nullptr);
 	vkDestroyCommandPool(g_device, g_commandPool, nullptr);
 	vkDestroySwapchainKHR(g_device, g_swapchain, nullptr);
@@ -92,7 +94,7 @@ void render() {
 	vkResetFences(g_device, 1, &g_fence);
 
 	uint32_t imageIndex{};
-	vkAcquireNextImageKHR(g_device, g_swapchain, UINT64_MAX, VK_NULL_HANDLE, VK_NULL_HANDLE, &imageIndex);
+	vkAcquireNextImageKHR(g_device, g_swapchain, UINT64_MAX, g_semaphore, VK_NULL_HANDLE, &imageIndex);
 
 	vkResetCommandPool(g_device, g_commandPool, 0);
 
@@ -134,6 +136,8 @@ void render() {
 	VkSwapchainKHR swapchain = g_swapchain;
 	VkPresentInfoKHR presentInfo{
 		.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+		.waitSemaphoreCount = 1,
+		.pWaitSemaphores = &g_semaphore,
 		.swapchainCount = 1,
 		.pSwapchains = &swapchain,
 		.pImageIndices = &imageIndex,
@@ -145,8 +149,15 @@ void render() {
 		.pCommandBuffers = &cmd,
 	};
 
-	vkQueueSubmit(g_device.get_queue(vkb::QueueType::graphics).value(), 1, &submitInfo, g_fence);
-	vkQueuePresentKHR(g_device.get_queue(vkb::QueueType::present).value(), &presentInfo);
+	auto result = vkQueueSubmit(g_device.get_queue(vkb::QueueType::graphics).value(), 1, &submitInfo, g_fence);
+	if (result != VK_SUCCESS) {
+		printf("Submit failed: %d\n", result);
+	}
+
+	result = vkQueuePresentKHR(g_device.get_queue(vkb::QueueType::present).value(), &presentInfo);
+	if (result != VK_SUCCESS) {
+		printf("Present failed: %d\n", result);
+	}
 }
 
 void init_vulkan() {
@@ -202,6 +213,11 @@ void init_vulkan() {
 		.flags = VK_FENCE_CREATE_SIGNALED_BIT,
 	};
 	vkCreateFence(g_device, &fenceCreateInfo, nullptr, &g_fence);
+
+	VkSemaphoreCreateInfo semaphoreInfo{
+		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+	};
+	vkCreateSemaphore(g_device, &semaphoreInfo, nullptr, &g_semaphore);
 }
 
 void init_allocator() {
